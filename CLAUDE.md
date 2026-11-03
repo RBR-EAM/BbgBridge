@@ -89,9 +89,13 @@ minimal and trivial to read for a .NET developer: flat layout, few files, no com
   object and `securityError` (code 43) before `sequenceNumber`; BDH empty `fieldData` array and `securityError`
   (code 15) after `sequenceNumber`. In BDH a date with no value for any requested field has no row.
 - Not verified: reconnection after a Terminal logout, the published Release exe on a manager's PC.
-- Next: the user (a portfolio manager with a Terminal) tests reconnection on 2026-11-04 with `dotnet run` and the
-  test page: Subscribe, then log the Terminal out; expected `SessionTerminated` or `SubscriptionTerminated` pushes
-  and, for a BDP with `"maxAgeSeconds": 0`, an error after a few seconds ("Bloomberg unavailable" or "Bloomberg
-  request failed"). After logging back in, the same BDP must return data and Unsubscribe then Subscribe must restart
-  live updates, without restarting the bridge. He reports the live table, the replies and the bridge console.
+- Per the user (not yet observed): the Terminal's Desktop API keeps serving for about 24 h after the Terminal is
+  closed, then its token expires. So closing the Terminal at night should not break the bridge; the event to observe
+  is the token expiry.
+- Next: the user (a portfolio manager with a Terminal) leaves the bridge running and closes the Terminal as usual.
+  Next morning, before reopening it, a BDP with `"maxAgeSeconds": 0` should still work. After more than 24 h without
+  the Terminal (for example a weekend), he sends the same BDP, reports the exact reply and the bridge console, then
+  reopens the Terminal and checks that data comes back without restarting the bridge. Risk: the refdata session is
+  only recreated on an exception or `REQUEST_STATUS`; if expiry arrives as a `responseError` inside the reply, the
+  old session is kept, and it is unknown whether it recovers after the Terminal logs back in.
 - Next: confirm `MaxDataPointsPerDay` with Bloomberg.

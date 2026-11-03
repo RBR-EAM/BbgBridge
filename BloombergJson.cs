@@ -16,14 +16,14 @@ static class BloombergJson
             json.WriteStartArray();
             for (var i = 0; i < element.NumValues; i++)
             {
-                if (element.IsComplexType)
+                if (HoldsElements(element))
                     Write(json, element.GetValueAsElement(i));
                 else
                     WriteScalar(json, element, i);
             }
             json.WriteEndArray();
         }
-        else if (element.IsComplexType)
+        else if (HoldsElements(element))
         {
             json.WriteStartObject();
             for (var i = 0; i < element.NumElements; i++)
@@ -39,6 +39,9 @@ static class BloombergJson
             WriteScalar(json, element, 0);
         }
     }
+
+    static bool HoldsElements(Element element) =>
+        element.Datatype is Schema.Datatype.SEQUENCE or Schema.Datatype.CHOICE;
 
     static void WriteScalar(Utf8JsonWriter json, Element element, int index)
     {

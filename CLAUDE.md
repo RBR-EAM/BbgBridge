@@ -11,7 +11,9 @@ minimal and trivial to read for a .NET developer: flat layout, few files, no com
 
 - .NET 10, ASP.NET Core minimal hosting, `win-x64`, single-file self-contained publish.
 - Security gate: listen on `127.0.0.1` only (hard-coded) and refuse non-loopback clients; exact `Origin` allowlist
-  (`https://` only outside mock mode); `Host` must be `127.0.0.1:<port>`.
+  (`https://` only in Release builds; Debug also accepts `http://` for the test page); `Host` must be
+  `127.0.0.1:<port>`.
+- `testpage/index.html`: single-file test page, no dependency, served with `python -m http.server`.
 - Closed protocol: `ReferenceDataRequest`, `HistoricalDataRequest`, `Subscribe`, `Unsubscribe`. Unknown JSON
   properties are rejected. Field names `[A-Za-z0-9_]`. A `Subscribe` security cannot contain `?` or start with `//`.
 - Reference data: one synchronous session, one request at a time, lazy connection, session reset on any failure.
@@ -46,6 +48,7 @@ minimal and trivial to read for a .NET developer: flat layout, few files, no com
 | `BloombergSubscriptions.cs` | `//blp/mktdata` subscriptions |
 | `BloombergJson.cs` | Writes a Bloomberg `Element` as JSON |
 | `FakeBloomberg.cs` | Mock mode |
+| `testpage/index.html` | Test web page |
 
 ## Findings
 

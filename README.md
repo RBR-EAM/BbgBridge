@@ -14,6 +14,7 @@ navigateur (https://app.interne) ── ws://127.0.0.1:8765/ws ──► BbgBrid
 | `BloombergSubscriptions.cs` | Temps réel (`//blp/mktdata`) |
 | `BloombergJson.cs` | Conversion des messages Bloomberg en JSON |
 | `FakeBloomberg.cs` | Mode simulé, disponible seulement en Debug |
+| `testpage/index.html` | Page web de test |
 | `appsettings.json` | Port, origines autorisées, cache, budget |
 | `nuget.config` | Sources NuGet : le flux Bloomberg ne sert que pour `Bloomberg.*` |
 
@@ -113,9 +114,25 @@ ws.onopen = () => ws.send(JSON.stringify({ id: "1", type: "ReferenceDataRequest"
 dotnet run -- --mock
 ```
 
-Le pont répond avec des données fictives sans Terminal : BDP, BDH, et des mises à jour temps réel chaque seconde. Les valeurs sont stables pour une date donnée, et tous les champs sont des nombres. En mode simulé, `AllowedOrigins` accepte aussi `http://` (par exemple `http://localhost:5173` pour un serveur de dev).
+Le pont répond avec des données fictives sans Terminal : BDP, BDH, et des mises à jour temps réel chaque seconde. Les valeurs sont stables pour une date donnée, et tous les champs sont des nombres.
 
 Ce mode n'existe que dans les builds **Debug**. L'exe publié en Release ignore `--mock` : il ne peut pas servir de fausses données à un gérant.
+
+En Debug (`dotnet run`), `AllowedOrigins` accepte aussi `http://`, par exemple `http://localhost:8000` pour la page de test ou un serveur de dev. L'exe Release n'accepte que `https://`.
+
+## Page de test
+
+`testpage/index.html` est une page unique qui se connecte au pont. Elle propose des exemples prêts à envoyer (BDP, BDS, BDH, Subscribe, Unsubscribe), un tableau temps réel et le journal des réponses.
+
+1. Lancer le pont, avec le Terminal (ou ajouter `--mock`) :
+   ```
+   dotnet run -- --AllowedOrigins:0=http://localhost:8000
+   ```
+2. Dans un second terminal, servir la page :
+   ```
+   uv run python -m http.server 8000 --bind 127.0.0.1 --directory testpage
+   ```
+3. Ouvrir `http://localhost:8000` (avec `localhost`, pas `127.0.0.1`, pour que l'origine corresponde).
 
 ## Sécurité
 

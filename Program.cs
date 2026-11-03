@@ -30,8 +30,10 @@ var maxDataPointsPerDay = builder.Configuration.GetValue("MaxDataPointsPerDay", 
 if (allowedOrigins.Length == 0)
     throw new InvalidOperationException("appsettings.json: AllowedOrigins must list the web app origins, e.g. \"https://app.mycompany.internal\".");
 
-if (!mock && allowedOrigins.Any(origin => !origin.StartsWith("https://")))
+#if !DEBUG
+if (allowedOrigins.Any(origin => !origin.StartsWith("https://")))
     throw new InvalidOperationException("appsettings.json: AllowedOrigins must all start with https://");
+#endif
 
 if (cacheDuration <= TimeSpan.Zero || maxDataPointsPerDay <= 0)
     throw new InvalidOperationException("appsettings.json: CacheSeconds and MaxDataPointsPerDay must be positive.");

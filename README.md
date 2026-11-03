@@ -64,7 +64,7 @@ Données en masse (BDS) : c'est la même requête, avec un champ bulk.
 { "id": "2", "type": "ReferenceDataRequest", "securities": ["AAPL US Equity"], "fields": ["DVD_HIST_ALL"] }
 ```
 
-Historique (BDH) : dates au format `yyyyMMdd`, `periodicity` facultative (`DAILY` par défaut).
+Historique (BDH) : dates au format `yyyyMMdd`, `periodicity` facultative (`DAILY` par défaut). Une requête est limitée à 1 million de valeurs, estimées par titres × champs × périodes (261 par an en `DAILY`, 52 en `WEEKLY`, 12 en `MONTHLY`…). Par exemple, 1000 titres × 1 champ × 3 ans en quotidien passe ; sur 4 ans, il faut découper la requête.
 ```json
 { "id": "3", "type": "HistoricalDataRequest", "securities": ["AAPL US Equity"], "fields": ["PX_LAST"], "startDate": "20250101", "endDate": "20251231", "periodicity": "WEEKLY" }
 ```
@@ -103,7 +103,7 @@ ws.onopen = () => ws.send(JSON.stringify({ id: "1", type: "ReferenceDataRequest"
 
 ## Cache et budget
 
-- **Cache.** Une requête BDP/BDS/BDH identique (mêmes titres, champs, overrides et dates) est servie depuis la mémoire du pont, jusqu'à `CacheSeconds` (1 h par défaut) ou jusqu'au `maxAgeSeconds` de la requête. Elle ne coûte rien sur le quota Bloomberg, donc l'utilisateur peut rafraîchir autant qu'il veut. Le cache vit uniquement en mémoire, sur le PC de l'utilisateur ; il n'est jamais écrit sur disque et disparaît à l'arrêt du pont.
+- **Cache.** Une requête BDP/BDS/BDH identique (mêmes titres, champs, overrides et dates) est servie depuis la mémoire du pont, jusqu'à `CacheSeconds` (1 h par défaut) ou jusqu'au `maxAgeSeconds` de la requête. Elle ne coûte rien sur le quota Bloomberg, donc l'utilisateur peut rafraîchir autant qu'il veut. Le cache vit uniquement en mémoire, sur le PC de l'utilisateur ; il n'est jamais écrit sur disque et disparaît à l'arrêt du pont. Sa taille totale est plafonnée à 100 millions de caractères de JSON (environ 200 Mo) ; une réponse qui ne tient pas sous ce plafond n'est pas mise en cache.
 - **Fraîcheur.** Une valeur intraday comme `PX_LAST` reste la même tant qu'elle est servie par le cache. `asOf` permet d'afficher l'heure de la donnée, et `maxAgeSeconds` permet de demander une valeur plus récente. On peut aussi suivre un prix avec `Subscribe`.
 - **Budget.** Chaque appel réel à Bloomberg consomme titres × champs points du budget journalier du pont. Un `Subscribe` en consomme autant à l'ouverture. Une fois le budget épuisé, le pont répond une erreur au lieu d'appeler Bloomberg, et l'accès API du Terminal reste protégé. Ce budget est une protection propre au pont : il ne reproduit pas la façon dont Bloomberg compte l'usage.
 
@@ -125,7 +125,7 @@ Ce que garantit le pont :
 - **Origine.** Le header `Origin` doit correspondre exactement à une entrée de `AllowedOrigins`, sinon la réponse est 403, y compris quand le header est absent. Un site quelconque ouvert par l'utilisateur ne peut donc pas utiliser le pont.
 - **Host.** Le header `Host` doit valoir `127.0.0.1:<port>`, ce qui bloque le DNS rebinding.
 - **Protocole fermé.** Quatre types de messages, toute propriété JSON inconnue rejetée. Les noms de champs ne contiennent que lettres, chiffres et `_`. Un titre temps réel ne peut ni changer de service (`//`) ni ajouter d'options (`?`).
-- **Limites.** Messages de 64 Ko, 1000 titres et 25 champs par requête, 1000 titres en temps réel au total, 10 ans d'historique. Une seule requête Bloomberg à la fois, et un budget journalier de points de données.
+- **Limites.** Messages de 64 Ko, 1000 titres et 25 champs par requête, 1000 titres en temps réel au total, 10 ans d'historique et 1 million de valeurs par BDH. Une seule requête Bloomberg à la fois, et un budget journalier de points de données.
 - **Rien ne sort et rien n'est écrit.** Le pont ne parle qu'au Terminal et au navigateur local, n'écrit rien sur disque et ne journalise aucune valeur Bloomberg. Il n'a aucune dépendance en dehors de .NET et du SDK Bloomberg.
 
 Ce que doit garantir la webapp :

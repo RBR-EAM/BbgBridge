@@ -26,13 +26,14 @@ sealed class FakeBloombergRequests : IBloombergRequests
     {
         var start = DateOnly.ParseExact(query.StartDate!, "yyyyMMdd", CultureInfo.InvariantCulture);
         var end = DateOnly.ParseExact(query.EndDate!, "yyyyMMdd", CultureInfo.InvariantCulture);
+        var periodicity = query.Periodicity ?? "DAILY";
         var messages = new JsonArray();
         foreach (var security in query.Securities!)
         {
             var rows = new JsonArray();
-            for (var day = start; day <= end; day = day.AddDays(1))
+            for (var day = start; day <= end; day = NextPeriod(day, periodicity))
             {
-                if (day.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday)
+                if (periodicity == "DAILY" && day.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday)
                     continue;
                 var row = new JsonObject { ["date"] = day.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) };
                 foreach (var field in query.Fields!)
@@ -51,6 +52,16 @@ sealed class FakeBloombergRequests : IBloombergRequests
         }
         return messages;
     }
+
+    static DateOnly NextPeriod(DateOnly day, string periodicity) => periodicity switch
+    {
+        "WEEKLY" => day.AddDays(7),
+        "MONTHLY" => day.AddMonths(1),
+        "QUARTERLY" => day.AddMonths(3),
+        "SEMI_ANNUALLY" => day.AddMonths(6),
+        "YEARLY" => day.AddYears(1),
+        _ => day.AddDays(1),
+    };
 }
 
 sealed class FakeBloombergSubscriptions : IBloombergSubscriptions

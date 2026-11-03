@@ -1,5 +1,8 @@
+using System.Buffers;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
+using System.Text;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 
 static class BridgeMessages
@@ -7,8 +10,20 @@ static class BridgeMessages
     public static string Result(string id, JsonNode result) =>
         new JsonObject { ["id"] = id, ["result"] = result }.ToJsonString();
 
-    public static string Data(string id, DateTime asOf, JsonNode messages) =>
-        new JsonObject { ["id"] = id, ["asOf"] = asOf, ["result"] = messages }.ToJsonString();
+    public static string Data(string id, DateTime asOf, string messagesJson)
+    {
+        var buffer = new ArrayBufferWriter<byte>();
+        using (var json = new Utf8JsonWriter(buffer))
+        {
+            json.WriteStartObject();
+            json.WriteString("id", id);
+            json.WriteString("asOf", asOf);
+            json.WritePropertyName("result");
+            json.WriteRawValue(messagesJson, skipInputValidation: true);
+            json.WriteEndObject();
+        }
+        return Encoding.UTF8.GetString(buffer.WrittenSpan);
+    }
 
     public static string Error(string? id, string error) =>
         new JsonObject { ["id"] = id, ["error"] = error }.ToJsonString();
@@ -38,9 +53,19 @@ sealed record BridgeRequest(
     const int MaxOverrides = 20;
     const int MaxTextLength = 100;
     const int MaxHistoryDays = 3660;
+    const int MaxHistoryValues = 1_000_000;
 
     static readonly string[] Types = [ReferenceData, HistoricalData, Subscribe, Unsubscribe];
-    static readonly string[] Periodicities = ["DAILY", "WEEKLY", "MONTHLY", "QUARTERLY", "SEMI_ANNUALLY", "YEARLY"];
+
+    static readonly Dictionary<string, int> PeriodsPerYear = new()
+    {
+        ["DAILY"] = 261,
+        ["WEEKLY"] = 52,
+        ["MONTHLY"] = 12,
+        ["QUARTERLY"] = 4,
+        ["SEMI_ANNUALLY"] = 2,
+        ["YEARLY"] = 1,
+    };
 
     public void Validate()
     {
@@ -74,8 +99,12 @@ sealed record BridgeRequest(
         {
             var days = ParseDate(EndDate).DayNumber - ParseDate(StartDate).DayNumber;
             Require(days is >= 0 and <= MaxHistoryDays, $"endDate must be 0 to {MaxHistoryDays} days after startDate");
-            Require(Periodicity is null || Periodicities.Contains(Periodicity),
-                $"periodicity must be one of {string.Join(", ", Periodicities)}");
+            Require(Periodicity is null || PeriodsPerYear.ContainsKey(Periodicity),
+                $"periodicity must be one of {string.Join(", ", PeriodsPerYear.Keys)}");
+
+            var periods = Math.Ceiling((days + 1) / 365.25 * PeriodsPerYear[Periodicity ?? "DAILY"]);
+            Require(Securities.Length * Fields.Length * periods <= MaxHistoryValues,
+                $"too much history in one request: securities × fields × periods must stay under {MaxHistoryValues:N0}; split the request or use a longer periodicity");
         }
     }
 

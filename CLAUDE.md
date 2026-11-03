@@ -17,14 +17,17 @@ minimal and trivial to read for a .NET developer: flat layout, few files, no com
 - Reference data: one synchronous session, one request at a time, lazy connection, session reset on any failure.
 - Real time: a separate asynchronous session, `interval=1.0`, lock-free event handler, a bounded outbox per
   connection. `SessionTerminated` is pushed to subscribers.
-- In-memory cache (`CacheSeconds`, default 3600) keyed by the request without its `id` and `maxAgeSeconds`.
+- In-memory cache (`CacheSeconds`, default 3600) keyed by the request without its `id` and `maxAgeSeconds`. It
+  stores the serialized JSON (not `JsonNode` trees) and is capped at 100 million characters; a larger answer is
+  not cached. Workstation GC (desktop tool).
   Replies carry `asOf` (UTC time Bloomberg was queried). `maxAgeSeconds` per request sets the oldest acceptable
   cached answer (`0` forces a Bloomberg call).
 - Daily budget of data points (securities × fields), `MaxDataPointsPerDay` default 250000: placeholder, to confirm
   with Bloomberg. It is the bridge's own protection, not Bloomberg's accounting.
 - Docs present `Subscribe` as an option, never as the recommended way to get live prices (user's choice).
 - Limits: 1000 securities, 25 fields, 20 overrides, 3660 days of history, 1000 live securities in total, 64 KB
-  messages.
+  messages. A `HistoricalDataRequest` is capped at 1 million values, estimated as securities × fields × periods
+  (periods per year: DAILY 261, WEEKLY 52, MONTHLY 12, QUARTERLY 4, SEMI_ANNUALLY 2, YEARLY 1).
 - Mock mode (`--mock`) exists only in Debug builds.
 - `Bloomberg.Blpapi` 3.26.9.1 pinned, from Bloomberg's NuGet feed (classic managed build, `net8.0` lib, not FFI).
   The feed needs `nuget.blpapi.bloomberg.com` and `blpapi.bloomberg.com`.
@@ -50,6 +53,10 @@ minimal and trivial to read for a .NET developer: flat layout, few files, no com
 - Without a Terminal, `Session.Start` fails after 6 to 8 s; the bridge answers "Bloomberg unavailable" and retries on
   the next request.
 - The publish folder also contains `aspnetcorev2_inprocess.dll` (IIS module from the runtime pack, unused).
+- Memory, mock mode, 2 × (1000 securities × 1 field × 3 years daily, 26.5 MB of JSON) + 1 small request, process
+  RSS afterwards: JsonNode cache + server GC 1180 MB; serialized cache + server GC 885 MB; serialized cache +
+  workstation GC 833 MB. Cached answer served in 0.5 s instead of 1.6 s. The remaining peak comes from building
+  the answer as a `JsonNode` tree; writing JSON directly from Bloomberg elements (`Utf8JsonWriter`) would lower it.
 - Cloud environment: `git commit` is denied when run directly through Bash; use the `.work/runner.sh` job runner.
 - Cloud environment: repository settings (for example the default branch) cannot be changed through `gh`, and
   remote branches cannot be deleted with `git push --delete`: the proxy answers 403. The user does both on GitHub.
@@ -58,8 +65,7 @@ minimal and trivial to read for a .NET developer: flat layout, few files, no com
 
 - Done: builds in Debug and Release with zero warnings (`TreatWarningsAsErrors`). Tested in the cloud container:
   security gate, validation, mock mode, cache, `asOf`, `maxAgeSeconds`, daily budget, behaviour without a Terminal.
-- Open: a maximal `HistoricalDataRequest` (1000 securities × 25 fields × 10 years) is about 65 million values, far
-  more than its 25000 budget points suggest; proposed to the user: cap securities × fields × days per request.
+- Done: history volume capped at 1 million values per request (a maximal request used to be about 65 million).
 - Not verified: live Terminal behaviour (string format of dates, subscription events, reconnection).
 - Next: the user runs `dotnet run` on a Terminal PC with the web app origin in `AllowedOrigins`, then the console
   snippet from `README.md`. Confirm `MaxDataPointsPerDay` with Bloomberg.

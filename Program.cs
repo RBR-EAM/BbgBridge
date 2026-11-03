@@ -10,6 +10,7 @@ using Microsoft.Extensions.Caching.Memory;
 
 const int MaxMessageBytes = 64 * 1024;
 const int MaxPendingMessagesPerClient = 10_000;
+const long MaxCachedCharacters = 100_000_000;
 
 #if DEBUG
 var mock = args.Contains("--mock");
@@ -51,7 +52,7 @@ if (mock)
 IBloombergRequests requests = mock ? new FakeBloombergRequests() : new BloombergRequests();
 IBloombergSubscriptions subscriptions = mock ? new FakeBloombergSubscriptions() : new BloombergSubscriptions();
 
-var cache = new MemoryCache(new MemoryCacheOptions());
+var cache = new MemoryCache(new MemoryCacheOptions { SizeLimit = MaxCachedCharacters });
 
 var dailyBudget = new FixedWindowRateLimiter(new FixedWindowRateLimiterOptions
 {
@@ -174,7 +175,7 @@ async Task<string> Handle(ReadOnlyMemory<byte> message, ChannelWriter<string> ou
 
             default:
                 var data = await Task.Run(() => ExecuteWithCache(request));
-                return BridgeMessages.Data(request.Id, data.AsOf, data.Messages.DeepClone());
+                return BridgeMessages.Data(request.Id, data.AsOf, data.MessagesJson);
         }
     }
     catch (Exception e)
@@ -193,8 +194,12 @@ CachedData ExecuteWithCache(BridgeRequest request)
 
     SpendDailyBudget(request);
     var askedAt = DateTime.UtcNow;
-    var fresh = new CachedData(askedAt, requests.Execute(request));
-    cache.Set(key, fresh, cacheDuration);
+    var fresh = new CachedData(askedAt, requests.Execute(request).ToJsonString());
+    cache.Set(key, fresh, new MemoryCacheEntryOptions
+    {
+        Size = fresh.MessagesJson.Length,
+        AbsoluteExpirationRelativeToNow = cacheDuration,
+    });
     return fresh;
 }
 
@@ -205,4 +210,4 @@ void SpendDailyBudget(BridgeRequest request)
         throw new InvalidOperationException($"Daily budget of {maxDataPointsPerDay} Bloomberg data points reached");
 }
 
-sealed record CachedData(DateTime AsOf, JsonArray Messages);
+sealed record CachedData(DateTime AsOf, string MessagesJson);

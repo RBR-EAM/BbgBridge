@@ -20,14 +20,18 @@ sealed class FakeBloombergRequests : IBloombergRequests
         json.WriteStartArray();
         json.WriteStartObject();
         json.WriteStartArray("securityData");
-        foreach (var security in query.Securities!)
+        for (var i = 0; i < query.Securities!.Length; i++)
         {
+            var security = query.Securities[i];
             json.WriteStartObject();
             json.WriteString("security", security);
+            json.WriteStartArray("eidData");
+            json.WriteEndArray();
             json.WriteStartArray("fieldExceptions");
             json.WriteEndArray();
             json.WritePropertyName("fieldData");
             FakeData.WriteFields(json, security, query.Fields!, today);
+            json.WriteNumber("sequenceNumber", i);
             json.WriteEndObject();
         }
         json.WriteEndArray();
@@ -41,11 +45,14 @@ sealed class FakeBloombergRequests : IBloombergRequests
         var end = DateOnly.ParseExact(query.EndDate!, "yyyyMMdd", CultureInfo.InvariantCulture);
         var periodicity = query.Periodicity ?? "DAILY";
         json.WriteStartArray();
-        foreach (var security in query.Securities!)
+        for (var i = 0; i < query.Securities!.Length; i++)
         {
+            var security = query.Securities[i];
             json.WriteStartObject();
             json.WriteStartObject("securityData");
             json.WriteString("security", security);
+            json.WriteStartArray("eidData");
+            json.WriteEndArray();
             json.WriteStartArray("fieldExceptions");
             json.WriteEndArray();
             json.WriteStartArray("fieldData");
@@ -60,6 +67,7 @@ sealed class FakeBloombergRequests : IBloombergRequests
                 json.WriteEndObject();
             }
             json.WriteEndArray();
+            json.WriteNumber("sequenceNumber", i);
             json.WriteEndObject();
             json.WriteEndObject();
         }
@@ -109,12 +117,15 @@ sealed class FakeBloombergSubscriptions : IBloombergSubscriptions
 
         using var timer = new PeriodicTimer(TimeSpan.FromSeconds(1));
         using var stopTimer = stop.Register(timer.Dispose);
-        while (await timer.WaitForNextTickAsync())
+        for (var tick = 0; await timer.WaitForNextTickAsync(); tick++)
+        {
+            var changedFields = request.Fields!.Where((_, index) => (tick + index) % 3 != 0).ToArray();
             foreach (var security in request.Securities)
             {
-                var data = Utf8Json.Write(json => FakeData.WriteFields(json, security, request.Fields!, DateTime.UtcNow));
+                var data = Utf8Json.Write(json => FakeData.WriteFields(json, security, changedFields, DateTime.UtcNow));
                 outbox.TryWrite(BridgeMessages.Push(request.Id, security, "MarketDataEvents", data));
             }
+        }
     }
 }
 

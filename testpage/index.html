@@ -30,6 +30,7 @@
   <button data-example="bdh">BDH</button>
   <button data-example="subscribe">Subscribe</button>
   <button data-example="unsubscribe">Unsubscribe</button>
+  <button data-example="errors">Erreurs</button>
 </p>
 <textarea id="request" spellcheck="false"></textarea>
 <p><button id="send">Envoyer</button></p>
@@ -55,10 +56,12 @@ const examples = {
          startDate: yyyymmdd(new Date(today - 14 * 86400000)), endDate: yyyymmdd(today) },
   subscribe: { id: "live", type: "Subscribe", securities: ["IBM US Equity", "EURUSD Curncy"], fields: ["LAST_PRICE", "BID", "ASK"] },
   unsubscribe: { id: "live", type: "Unsubscribe" },
+  errors: { id: "errors", type: "ReferenceDataRequest", securities: ["IBM US Equity", "NOT_A_TICKER US Equity"], fields: ["PX_LAST", "NOT_A_FIELD"] },
 };
 
 let socket;
 let liveFields = [];
+const liveValues = new Map();
 
 function setStatus(connected, code) {
   $("status").textContent = connected ? "connecté" : "déconnecté" + (code ? ` (code ${code})` : "");
@@ -82,7 +85,8 @@ function showPush(push) {
     row.dataset.key = key;
     for (let i = 0; i < 4; i++) row.insertCell();
   }
-  const data = push.data ?? {};
+  const data = Object.assign(liveValues.get(key) ?? {}, push.data);
+  liveValues.set(key, data);
   const shown = liveFields.filter(field => field in data);
   row.cells[0].textContent = push.security;
   row.cells[1].textContent = push.event;

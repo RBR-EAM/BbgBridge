@@ -14,6 +14,9 @@ minimal and trivial to read for a .NET developer: flat layout, few files, no com
   (`https://` only in Release builds; Debug also accepts `http://` for the test page); `Host` must be
   `127.0.0.1:<port>`.
 - `testpage/index.html`: single-file test page, no dependency, served with `python -m http.server`.
+- `EXAMPLES.md` documents every message with the real structure observed on a Terminal, but fictitious values: no
+  Bloomberg data is ever committed (Desktop API licence). The mock reproduces the same structure, including
+  `eidData`, `sequenceNumber`, and live updates that carry only some fields.
 - Closed protocol: `ReferenceDataRequest`, `HistoricalDataRequest`, `Subscribe`, `Unsubscribe`. Unknown JSON
   properties are rejected. Field names `[A-Za-z0-9_]`. A `Subscribe` security cannot contain `?` or start with `//`.
 - Reference data: one synchronous session, one request at a time, lazy connection, session reset on any failure.
@@ -49,6 +52,7 @@ minimal and trivial to read for a .NET developer: flat layout, few files, no com
 | `BloombergJson.cs` | Writes a Bloomberg `Element` as JSON |
 | `FakeBloomberg.cs` | Mock mode |
 | `testpage/index.html` | Test web page |
+| `EXAMPLES.md` | Real message structure, fictitious values |
 
 ## Findings
 
@@ -57,6 +61,11 @@ minimal and trivial to read for a .NET developer: flat layout, few files, no com
 - Without a Terminal, `Session.Start` fails after 6 to 8 s; the bridge answers "Bloomberg unavailable" and retries on
   the next request.
 - The publish folder also contains `aspnetcorev2_inprocess.dll` (IIS module from the runtime pack, unused).
+- SDK `Element.IsComplexType` is false for an array of sequences (it describes the array, not its values): decide
+  with `Datatype` (`SEQUENCE` or `CHOICE`). Found on the first live run, where every request failed.
+- Live Terminal run (2026-11-03, before the US open): BDP, BDS, BDH, Subscribe and Unsubscribe all work. Dates come
+  as `"yyyy-MM-dd"`; a field with no value is absent from the row (today's `PX_LAST` before the open); Bloomberg adds
+  `eidData` and `sequenceNumber`; a live update carries only the fields that changed (IBM sent `BID` alone).
 - Memory, mock mode, 2 × (1000 securities × 1 field × 3 years daily, 26.5 MB of JSON) + 1 small request, process
   RSS afterwards (first answer / cached answer):
   - JsonNode cache, server GC: 1180 MB (5.1 s / 1.6 s);
@@ -73,6 +82,8 @@ minimal and trivial to read for a .NET developer: flat layout, few files, no com
 - Done: builds in Debug and Release with zero warnings (`TreatWarningsAsErrors`). Tested in the cloud container:
   security gate, validation, mock mode, cache, `asOf`, `maxAgeSeconds`, daily budget, behaviour without a Terminal.
 - Done: history volume capped at 1 million values per request (a maximal request used to be about 65 million).
-- Not verified: live Terminal behaviour (string format of dates, subscription events, reconnection).
-- Next: the user runs `dotnet run` on a Terminal PC with the web app origin in `AllowedOrigins`, then the console
-  snippet from `README.md`. Confirm `MaxDataPointsPerDay` with Bloomberg.
+- Done: verified on a live Terminal with the test page (BDP, BDS, BDH, Subscribe, Unsubscribe).
+- Not verified: Bloomberg's error structure for an invalid security or field (to capture with the « Erreurs »
+  button of the test page and add to `EXAMPLES.md`), reconnection after a Terminal logout, the published Release
+  exe on a manager's PC.
+- Next: confirm `MaxDataPointsPerDay` with Bloomberg.

@@ -15,6 +15,7 @@ navigateur (https://app.interne) ── ws://127.0.0.1:8765/ws ──► BbgBrid
 | `BloombergJson.cs` | Conversion des messages Bloomberg en JSON |
 | `FakeBloomberg.cs` | Mode simulé, disponible seulement en Debug |
 | `testpage/index.html` | Page web de test |
+| `EXAMPLES.md` | Exemples complets de requêtes et de réponses, avec la structure réelle |
 | `appsettings.json` | Port, origines autorisées, cache, budget |
 | `nuget.config` | Sources NuGet : le flux Bloomberg ne sert que pour `Bloomberg.*` |
 
@@ -52,6 +53,8 @@ Si le port est déjà pris, par exemple par un pont déjà lancé, le pont refus
 | `MaxDataPointsPerDay` | `250000` | Budget de points de données (titres × champs) par jour. **Valeur provisoire, à fixer avec Bloomberg.** |
 
 ## Protocole
+
+Les exemples complets, avec la structure réelle des réponses Bloomberg, sont dans [EXAMPLES.md](EXAMPLES.md).
 
 Chaque requête reçoit une réponse avec le même `id` : soit `{"id", "result"}`, soit `{"id", "error"}`. Les réponses BDP/BDS/BDH contiennent aussi `asOf`, l'heure UTC à laquelle Bloomberg a réellement été interrogé.
 
@@ -91,7 +94,7 @@ Après `Subscribe`, le pont pousse des messages portant le même `id` :
 { "id": "s1", "security": "AAPL US Equity", "event": "MarketDataEvents", "data": { "LAST_PRICE": 123.45, "BID": 123.44 } }
 ```
 
-`event` vaut `MarketDataEvents` pour une mise à jour. Les autres valeurs sont des statuts : `SubscriptionStarted`, `SubscriptionFailure`, `SubscriptionTerminated`, et `SessionTerminated` quand le Terminal se déconnecte. Pour relancer un abonnement, envoyer `Unsubscribe` puis `Subscribe`. Les messages poussés peuvent arriver avant la réponse `subscribed` : il faut les traiter par leur `id`. Les abonnements d'un onglet s'arrêtent quand il se ferme.
+`event` vaut `MarketDataEvents` pour une mise à jour. Une mise à jour ne contient que les champs qui ont changé : il faut garder la dernière valeur connue de chaque champ. Les autres valeurs sont des statuts : `SubscriptionStarted`, `SubscriptionFailure`, `SubscriptionTerminated`, et `SessionTerminated` quand le Terminal se déconnecte. Pour relancer un abonnement, envoyer `Unsubscribe` puis `Subscribe`. Les messages poussés peuvent arriver avant la réponse `subscribed` : il faut les traiter par leur `id`. Les abonnements d'un onglet s'arrêtent quand il se ferme.
 
 Les valeurs des overrides s'écrivent toujours en chaînes de caractères. Un titre ou un champ invalide ne fait pas échouer la requête : Bloomberg le signale dans `securityError` ou `fieldExceptions`.
 

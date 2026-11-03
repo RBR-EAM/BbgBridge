@@ -31,6 +31,7 @@
   <button data-example="subscribe">Subscribe</button>
   <button data-example="unsubscribe">Unsubscribe</button>
   <button data-example="errors">Erreurs</button>
+  <button data-example="bdhErrors">Erreurs BDH</button>
 </p>
 <textarea id="request" spellcheck="false"></textarea>
 <p><button id="send">Envoyer</button></p>
@@ -57,6 +58,8 @@ const examples = {
   subscribe: { id: "live", type: "Subscribe", securities: ["IBM US Equity", "EURUSD Curncy"], fields: ["LAST_PRICE", "BID", "ASK"] },
   unsubscribe: { id: "live", type: "Unsubscribe" },
   errors: { id: "errors", type: "ReferenceDataRequest", securities: ["IBM US Equity", "NOT_A_TICKER US Equity"], fields: ["PX_LAST", "NOT_A_FIELD"] },
+  bdhErrors: { id: "bdhErrors", type: "HistoricalDataRequest", securities: ["IBM US Equity", "NOT_A_TICKER US Equity"], fields: ["PX_LAST", "NOT_A_FIELD"],
+               startDate: yyyymmdd(new Date(today - 7 * 86400000)), endDate: yyyymmdd(today) },
 };
 
 let socket;

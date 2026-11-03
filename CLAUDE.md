@@ -92,10 +92,8 @@ minimal and trivial to read for a .NET developer: flat layout, few files, no com
 - Per the user (not yet observed): the Terminal's Desktop API keeps serving for about 24 h after the Terminal is
   closed, then its token expires. So closing the Terminal at night should not break the bridge; the event to observe
   is the token expiry.
-- Next: the user (a portfolio manager with a Terminal) leaves the bridge running and closes the Terminal as usual.
-  Next morning, before reopening it, a BDP with `"maxAgeSeconds": 0` should still work. After more than 24 h without
-  the Terminal (for example a weekend), he sends the same BDP, reports the exact reply and the bridge console, then
-  reopens the Terminal and checks that data comes back without restarting the bridge. Risk: the refdata session is
-  only recreated on an exception or `REQUEST_STATUS`; if expiry arrives as a `responseError` inside the reply, the
-  old session is kept, and it is unknown whether it recovers after the Terminal logs back in.
+- Reconnection: the user, who has used the Desktop API for years, states that the API recovers on its own once the
+  Terminal is logged back in, and considers this settled. Not observed with the bridge itself; if a reply ever stays
+  in error after the Terminal is back, recreate the refdata session on that error (today it is only recreated on an
+  exception or `REQUEST_STATUS`).
 - Next: confirm `MaxDataPointsPerDay` with Bloomberg.

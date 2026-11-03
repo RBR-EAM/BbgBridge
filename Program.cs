@@ -25,7 +25,7 @@ var builder = WebApplication.CreateBuilder(new WebApplicationOptions
 
 var port = builder.Configuration.GetValue("Port", 8765);
 var allowedOrigins = builder.Configuration.GetSection("AllowedOrigins").Get<string[]>() ?? [];
-var cacheDuration = TimeSpan.FromSeconds(builder.Configuration.GetValue("CacheSeconds", 300));
+var cacheDuration = TimeSpan.FromSeconds(builder.Configuration.GetValue("CacheSeconds", 3600));
 var maxDataPointsPerDay = builder.Configuration.GetValue("MaxDataPointsPerDay", 250_000);
 
 if (allowedOrigins.Length == 0)
@@ -173,7 +173,8 @@ async Task<string> Handle(ReadOnlyMemory<byte> message, ChannelWriter<string> ou
                 return BridgeMessages.Result(request.Id, "unsubscribed");
 
             default:
-                return BridgeMessages.Result(request.Id, await Task.Run(() => ExecuteWithCache(request)));
+                var data = await Task.Run(() => ExecuteWithCache(request));
+                return BridgeMessages.Data(request.Id, data.AsOf, data.Messages.DeepClone());
         }
     }
     catch (Exception e)
@@ -182,16 +183,19 @@ async Task<string> Handle(ReadOnlyMemory<byte> message, ChannelWriter<string> ou
     }
 }
 
-JsonNode ExecuteWithCache(BridgeRequest request)
+CachedData ExecuteWithCache(BridgeRequest request)
 {
-    var key = JsonSerializer.Serialize(request with { Id = "" });
-    var messages = cache.GetOrCreate(key, entry =>
-    {
-        entry.AbsoluteExpirationRelativeToNow = cacheDuration;
-        SpendDailyBudget(request);
-        return requests.Execute(request);
-    });
-    return messages!.DeepClone();
+    var key = JsonSerializer.Serialize(request with { Id = "", MaxAgeSeconds = null });
+    var maxAge = request.MaxAgeSeconds is { } seconds ? TimeSpan.FromSeconds(seconds) : cacheDuration;
+
+    if (cache.Get<CachedData>(key) is { } cached && DateTime.UtcNow - cached.AsOf <= maxAge)
+        return cached;
+
+    SpendDailyBudget(request);
+    var askedAt = DateTime.UtcNow;
+    var fresh = new CachedData(askedAt, requests.Execute(request));
+    cache.Set(key, fresh, cacheDuration);
+    return fresh;
 }
 
 void SpendDailyBudget(BridgeRequest request)
@@ -200,3 +204,5 @@ void SpendDailyBudget(BridgeRequest request)
     if (!lease.IsAcquired)
         throw new InvalidOperationException($"Daily budget of {maxDataPointsPerDay} Bloomberg data points reached");
 }
+
+sealed record CachedData(DateTime AsOf, JsonArray Messages);

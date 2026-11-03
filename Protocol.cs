@@ -7,6 +7,9 @@ static class BridgeMessages
     public static string Result(string id, JsonNode result) =>
         new JsonObject { ["id"] = id, ["result"] = result }.ToJsonString();
 
+    public static string Data(string id, DateTime asOf, JsonNode messages) =>
+        new JsonObject { ["id"] = id, ["asOf"] = asOf, ["result"] = messages }.ToJsonString();
+
     public static string Error(string? id, string error) =>
         new JsonObject { ["id"] = id, ["error"] = error }.ToJsonString();
 
@@ -22,7 +25,8 @@ sealed record BridgeRequest(
     Dictionary<string, string>? Overrides = null,
     string? StartDate = null,
     string? EndDate = null,
-    string? Periodicity = null)
+    string? Periodicity = null,
+    int? MaxAgeSeconds = null)
 {
     public const string ReferenceData = "ReferenceDataRequest";
     public const string HistoricalData = "HistoricalDataRequest";
@@ -46,6 +50,8 @@ sealed record BridgeRequest(
             "startDate, endDate and periodicity are only for HistoricalDataRequest");
         Require(Type is ReferenceData or HistoricalData || Overrides is null,
             "overrides are only for ReferenceDataRequest and HistoricalDataRequest");
+        Require(MaxAgeSeconds is null || (Type is ReferenceData or HistoricalData && MaxAgeSeconds >= 0),
+            "maxAgeSeconds is a number of seconds >= 0, only for ReferenceDataRequest and HistoricalDataRequest");
 
         if (Type == Unsubscribe)
         {

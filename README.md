@@ -47,12 +47,12 @@ Si le port est déjà pris, par exemple par un pont déjà lancé, le pont refus
 |---|---|---|
 | `Port` | `8765` | Port d'écoute, toujours sur `127.0.0.1` |
 | `AllowedOrigins` | vide | Origines autorisées, en correspondance exacte |
-| `CacheSeconds` | `300` | Durée pendant laquelle une requête identique est servie depuis la mémoire, sans appeler Bloomberg |
+| `CacheSeconds` | `3600` | Durée maximale pendant laquelle une requête identique est servie depuis la mémoire, sans appeler Bloomberg |
 | `MaxDataPointsPerDay` | `250000` | Budget de points de données (titres × champs) par jour. **Valeur provisoire, à fixer avec Bloomberg.** |
 
 ## Protocole
 
-Chaque requête reçoit une réponse avec le même `id` : soit `{"id", "result"}`, soit `{"id", "error"}`.
+Chaque requête reçoit une réponse avec le même `id` : soit `{"id", "result"}`, soit `{"id", "error"}`. Les réponses BDP/BDS/BDH contiennent aussi `asOf`, l'heure UTC à laquelle Bloomberg a réellement été interrogé.
 
 Données de référence (BDP) :
 ```json
@@ -71,7 +71,12 @@ Historique (BDH) : dates au format `yyyyMMdd`, `periodicity` facultative (`DAILY
 
 Réponse : `result` contient les messages Bloomberg tels quels, convertis en JSON.
 ```json
-{ "id": "1", "result": [ { "securityData": [ { "security": "AAPL US Equity", "fieldData": { "PX_LAST": 123.45 }, "fieldExceptions": [] } ] } ] }
+{ "id": "1", "asOf": "2026-11-03T14:31:05.123Z", "result": [ { "securityData": [ { "security": "AAPL US Equity", "fieldData": { "PX_LAST": 123.45 }, "fieldExceptions": [] } ] } ] }
+```
+
+`maxAgeSeconds`, facultatif sur BDP/BDS/BDH, fixe l'âge maximal accepté pour une réponse en cache. Au-delà, le pont interroge Bloomberg. `0` force un appel à Bloomberg ; sans `maxAgeSeconds`, la limite est `CacheSeconds`.
+```json
+{ "id": "4", "type": "ReferenceDataRequest", "securities": ["AAPL US Equity"], "fields": ["PX_LAST"], "maxAgeSeconds": 30 }
 ```
 
 Temps réel : les champs temps réel ont leurs propres noms (`LAST_PRICE`, `BID`, `ASK`…). Bloomberg envoie au plus une mise à jour par seconde et par titre.
@@ -98,9 +103,9 @@ ws.onopen = () => ws.send(JSON.stringify({ id: "1", type: "ReferenceDataRequest"
 
 ## Cache et budget
 
-- **Cache.** Une requête BDP/BDS/BDH identique (mêmes titres, champs, overrides et dates) est servie depuis la mémoire du pont pendant `CacheSeconds`. Elle ne coûte rien sur le quota Bloomberg, donc l'utilisateur peut rafraîchir autant qu'il veut. Le cache vit uniquement en mémoire, sur le PC de l'utilisateur ; il n'est jamais écrit sur disque et disparaît à l'arrêt du pont.
-- **Budget.** Chaque appel réel à Bloomberg consomme titres × champs points du budget journalier. Un `Subscribe` en consomme autant à l'ouverture. Une fois le budget épuisé, le pont répond une erreur au lieu d'appeler Bloomberg, et l'accès API du Terminal reste protégé.
-- **Prix qui bougent.** Pour des prix qui bougent, utiliser `Subscribe` plutôt que de rafraîchir un BDP.
+- **Cache.** Une requête BDP/BDS/BDH identique (mêmes titres, champs, overrides et dates) est servie depuis la mémoire du pont, jusqu'à `CacheSeconds` (1 h par défaut) ou jusqu'au `maxAgeSeconds` de la requête. Elle ne coûte rien sur le quota Bloomberg, donc l'utilisateur peut rafraîchir autant qu'il veut. Le cache vit uniquement en mémoire, sur le PC de l'utilisateur ; il n'est jamais écrit sur disque et disparaît à l'arrêt du pont.
+- **Fraîcheur.** Une valeur intraday comme `PX_LAST` reste la même tant qu'elle est servie par le cache. `asOf` permet d'afficher l'heure de la donnée, et `maxAgeSeconds` permet de demander une valeur plus récente. On peut aussi suivre un prix avec `Subscribe`.
+- **Budget.** Chaque appel réel à Bloomberg consomme titres × champs points du budget journalier du pont. Un `Subscribe` en consomme autant à l'ouverture. Une fois le budget épuisé, le pont répond une erreur au lieu d'appeler Bloomberg, et l'accès API du Terminal reste protégé. Ce budget est une protection propre au pont : il ne reproduit pas la façon dont Bloomberg compte l'usage.
 
 ## Mode simulé (développement)
 

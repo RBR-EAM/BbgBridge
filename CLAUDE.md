@@ -26,6 +26,7 @@ minimal and trivial to read for a .NET developer: flat layout, few files, no com
   The feed needs `nuget.blpapi.bloomberg.com` and `blpapi.bloomberg.com`.
 - Out of scope: the frontend and the cloud backend, any persistence of Bloomberg data, B-PIPE / Server API,
   Linux / macOS.
+- Work is committed and pushed on `main` (user's choice).
 
 ## Layout
 
@@ -46,6 +47,8 @@ minimal and trivial to read for a .NET developer: flat layout, few files, no com
   the next request.
 - The publish folder also contains `aspnetcorev2_inprocess.dll` (IIS module from the runtime pack, unused).
 - Cloud environment: `git commit` is denied when run directly through Bash; use the `.work/runner.sh` job runner.
+- Cloud environment: repository settings (for example the default branch) cannot be changed through `gh`, the
+  proxy answers 403. The user changes them in the GitHub settings.
 
 ## Status
 

@@ -7,6 +7,7 @@ Structure réelle relevée sur un Terminal Bloomberg (SDK 3.26.9.1, novembre 202
 - `result` est la liste des messages Bloomberg de la réponse. Une grosse requête peut être découpée en plusieurs messages : il faut alors concaténer leurs `securityData`.
 - `sequenceNumber` est la position du titre dans la liste `securities` de la requête, à partir de 0.
 - **Un champ sans valeur est absent, il ne vaut pas `null`.** Exemple : le `PX_LAST` du jour, avant l'ouverture.
+- **En BDH, une date sans aucune valeur pour les champs demandés est absente** : sa ligne n'existe pas.
 - Les nombres restent des nombres JSON (NaN et l'infini deviennent `null`). Les dates sont des chaînes `"yyyy-MM-dd"`, les textes sont transmis tels quels.
 - Les noms de champs et de sous-champs sont ceux de Bloomberg, espaces compris (`"Declared Date"`).
 - `asOf` est l'heure UTC de l'appel réel à Bloomberg. Une réponse servie par le cache garde l'heure de l'appel d'origine.
@@ -162,7 +163,11 @@ Un titre ou un champ invalide ne fait pas échouer la requête : Bloomberg le si
 - **Champ invalide** : une entrée dans `fieldExceptions`, avec `fieldId` et `errorInfo`. Les autres champs du titre restent dans `fieldData`.
 - **Titre invalide** : `fieldData` est vide (`{}`), et un objet `securityError` apparaît.
 
-C'est la requête du bouton « Erreurs » de la page de test. Le mode simulé produit les mêmes erreurs pour les titres et les champs dont le nom commence par `NOT_A`.
+Les codes et l'ordre des clés diffèrent entre BDP/BDS et BDH (voir l'exemple BDH plus bas). Le mode simulé reproduit les deux, pour les titres et les champs dont le nom commence par `NOT_A`.
+
+### En BDP/BDS
+
+C'est la requête du bouton « Erreurs » de la page de test.
 
 ```json
 { "id": "errors", "type": "ReferenceDataRequest", "securities": ["IBM US Equity", "NOT_A_TICKER US Equity"], "fields": ["PX_LAST", "NOT_A_FIELD"] }
@@ -212,3 +217,65 @@ C'est la requête du bouton « Erreurs » de la page de test. Le mode simulé pr
   ]
 }
 ```
+
+### En BDH
+
+C'est la requête du bouton « Erreurs BDH » de la page de test. Par rapport au BDP :
+
+- les codes diffèrent : `1` / `NOT_APPLICABLE_TO_HIST_DATA` pour un champ, `15` pour un titre ;
+- pour un titre invalide, `fieldData` est un tableau vide (`[]`), et `securityError` arrive après `sequenceNumber`.
+
+```json
+{ "id": "bdhErrors", "type": "HistoricalDataRequest", "securities": ["IBM US Equity", "NOT_A_TICKER US Equity"], "fields": ["PX_LAST", "NOT_A_FIELD"], "startDate": "20261029", "endDate": "20261103" }
+```
+
+```json
+{
+  "id": "bdhErrors",
+  "asOf": "2026-11-03T13:01:40.0672619Z",
+  "result": [
+    {
+      "securityData": {
+        "security": "IBM US Equity",
+        "eidData": [],
+        "fieldExceptions": [
+          {
+            "fieldId": "NOT_A_FIELD",
+            "errorInfo": {
+              "source": "12345:rsfhdsvc5",
+              "code": 1,
+              "category": "BAD_FLD",
+              "message": "Invalid field",
+              "subcategory": "NOT_APPLICABLE_TO_HIST_DATA"
+            }
+          }
+        ],
+        "fieldData": [
+          { "date": "2026-10-29", "PX_LAST": 123.45 },
+          { "date": "2026-10-30", "PX_LAST": 124.56 },
+          { "date": "2026-11-02", "PX_LAST": 122.34 }
+        ],
+        "sequenceNumber": 0
+      }
+    },
+    {
+      "securityData": {
+        "security": "NOT_A_TICKER US Equity",
+        "eidData": [],
+        "fieldExceptions": [],
+        "fieldData": [],
+        "sequenceNumber": 1,
+        "securityError": {
+          "source": "12345:rsfhdsvc5",
+          "code": 15,
+          "category": "BAD_SEC",
+          "message": "Unknown/Invalid securityInvalid Security [nid:12345]",
+          "subcategory": "INVALID_SECURITY"
+        }
+      }
+    }
+  ]
+}
+```
+
+Le 2026-11-03 n'apparaît pas : aucune valeur de `PX_LAST` n'existait encore ce jour-là au moment de la requête.

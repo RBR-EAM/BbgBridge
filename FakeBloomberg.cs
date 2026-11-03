@@ -30,23 +30,11 @@ sealed class FakeBloombergRequests : IBloombergRequests
             json.WriteString("security", security);
             json.WriteStartArray("eidData");
             json.WriteEndArray();
-            json.WriteStartArray("fieldExceptions");
-            foreach (var field in validSecurity ? invalidFields : [])
-            {
-                json.WriteStartObject();
-                json.WriteString("fieldId", field);
-                json.WritePropertyName("errorInfo");
-                FakeData.WriteError(json, 9, "BAD_FLD", "Field not valid", "INVALID_FIELD");
-                json.WriteEndObject();
-            }
-            json.WriteEndArray();
+            FakeData.WriteFieldExceptions(json, validSecurity ? invalidFields : [], 9, "Field not valid", "INVALID_FIELD");
             json.WritePropertyName("fieldData");
             FakeData.WriteFields(json, security, validSecurity ? validFields : [], today);
             if (!validSecurity)
-            {
-                json.WritePropertyName("securityError");
-                FakeData.WriteError(json, 43, "BAD_SEC", "Unknown/Invalid Security", "INVALID_SECURITY");
-            }
+                FakeData.WriteSecurityError(json, 43);
             json.WriteNumber("sequenceNumber", i);
             json.WriteEndObject();
         }
@@ -60,30 +48,34 @@ sealed class FakeBloombergRequests : IBloombergRequests
         var start = DateOnly.ParseExact(query.StartDate!, "yyyyMMdd", CultureInfo.InvariantCulture);
         var end = DateOnly.ParseExact(query.EndDate!, "yyyyMMdd", CultureInfo.InvariantCulture);
         var periodicity = query.Periodicity ?? "DAILY";
+        var validFields = query.Fields!.Where(field => !FakeData.IsInvalid(field)).ToArray();
+        var invalidFields = query.Fields!.Where(FakeData.IsInvalid).ToArray();
         json.WriteStartArray();
         for (var i = 0; i < query.Securities!.Length; i++)
         {
             var security = query.Securities[i];
+            var validSecurity = !FakeData.IsInvalid(security);
             json.WriteStartObject();
             json.WriteStartObject("securityData");
             json.WriteString("security", security);
             json.WriteStartArray("eidData");
             json.WriteEndArray();
-            json.WriteStartArray("fieldExceptions");
-            json.WriteEndArray();
+            FakeData.WriteFieldExceptions(json, validSecurity ? invalidFields : [], 1, "Invalid field", "NOT_APPLICABLE_TO_HIST_DATA");
             json.WriteStartArray("fieldData");
-            for (var day = start; day <= end; day = NextPeriod(day, periodicity))
+            for (var day = start; validSecurity && validFields.Length > 0 && day <= end; day = NextPeriod(day, periodicity))
             {
                 if (periodicity == "DAILY" && day.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday)
                     continue;
                 json.WriteStartObject();
                 json.WriteString("date", day.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
-                foreach (var field in query.Fields!)
+                foreach (var field in validFields)
                     json.WriteNumber(field, FakeData.Value(security, field, day.ToDateTime(TimeOnly.MinValue)));
                 json.WriteEndObject();
             }
             json.WriteEndArray();
             json.WriteNumber("sequenceNumber", i);
+            if (!validSecurity)
+                FakeData.WriteSecurityError(json, 15);
             json.WriteEndObject();
             json.WriteEndObject();
         }
@@ -149,7 +141,27 @@ static class FakeData
 {
     public static bool IsInvalid(string name) => name.StartsWith("NOT_A");
 
-    public static void WriteError(Utf8JsonWriter json, int code, string category, string message, string subcategory)
+    public static void WriteFieldExceptions(Utf8JsonWriter json, string[] invalidFields, int code, string message, string subcategory)
+    {
+        json.WriteStartArray("fieldExceptions");
+        foreach (var field in invalidFields)
+        {
+            json.WriteStartObject();
+            json.WriteString("fieldId", field);
+            json.WritePropertyName("errorInfo");
+            WriteError(json, code, "BAD_FLD", message, subcategory);
+            json.WriteEndObject();
+        }
+        json.WriteEndArray();
+    }
+
+    public static void WriteSecurityError(Utf8JsonWriter json, int code)
+    {
+        json.WritePropertyName("securityError");
+        WriteError(json, code, "BAD_SEC", "Unknown/Invalid security", "INVALID_SECURITY");
+    }
+
+    static void WriteError(Utf8JsonWriter json, int code, string category, string message, string subcategory)
     {
         json.WriteStartObject();
         json.WriteString("source", "mock");

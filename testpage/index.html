@@ -97,7 +97,7 @@ function connect() {
   socket = new WebSocket($("url").value);
   socket.onopen = () => setStatus(true);
   socket.onclose = event => setStatus(false, event.code);
-  socket.onerror = () => log("Connexion impossible : le pont tourne-t-il, et l'origine de cette page est-elle dans AllowedOrigins ?");
+  socket.onerror = () => log(`Connexion refusée ou impossible. Vérifie que le pont tourne, et que l'origine de cette page, ${location.origin}, est dans AllowedOrigins (la console du pont affiche les connexions refusées).`);
   socket.onmessage = event => {
     const message = JSON.parse(event.data);
     if (message.event) showPush(message);

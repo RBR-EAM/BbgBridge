@@ -126,13 +126,15 @@ En Debug (`dotnet run`), `AllowedOrigins` accepte aussi `http://`, par exemple `
 
 1. Lancer le pont, avec le Terminal (ou ajouter `--mock`) :
    ```
-   dotnet run -- --AllowedOrigins:0=http://localhost:8000
+   dotnet run -- --AllowedOrigins:0=http://localhost:8000 --AllowedOrigins:1=http://127.0.0.1:8000
    ```
 2. Dans un second terminal, servir la page :
    ```
    uv run python -m http.server 8000 --bind 127.0.0.1 --directory testpage
    ```
-3. Ouvrir `http://localhost:8000` (avec `localhost`, pas `127.0.0.1`, pour que l'origine corresponde).
+3. Ouvrir `http://localhost:8000` ou `http://127.0.0.1:8000`.
+
+Si la page reste « déconnecté », la console du pont affiche la connexion refusée, avec l'origine reçue et les origines autorisées.
 
 ## Sécurité
 

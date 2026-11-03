@@ -75,6 +75,8 @@ app.Map("/ws", async context =>
 {
     if (!IsTrusted(context))
     {
+        app.Logger.LogWarning("Connection refused: Origin '{Origin}', Host '{Host}', from {RemoteIp}. Allowed origins: {AllowedOrigins}",
+            context.Request.Headers.Origin.ToString(), context.Request.Host.Value, context.Connection.RemoteIpAddress, string.Join(", ", allowedOrigins));
         context.Response.StatusCode = StatusCodes.Status403Forbidden;
         return;
     }

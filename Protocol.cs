@@ -1,35 +1,60 @@
 using System.Buffers;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
-using System.Text;
 using System.Text.Json;
-using System.Text.Json.Nodes;
 
-static class BridgeMessages
+static class Utf8Json
 {
-    public static string Result(string id, JsonNode result) =>
-        new JsonObject { ["id"] = id, ["result"] = result }.ToJsonString();
-
-    public static string Data(string id, DateTime asOf, string messagesJson)
+    public static byte[] Write(Action<Utf8JsonWriter> write)
     {
         var buffer = new ArrayBufferWriter<byte>();
         using (var json = new Utf8JsonWriter(buffer))
-        {
-            json.WriteStartObject();
-            json.WriteString("id", id);
-            json.WriteString("asOf", asOf);
-            json.WritePropertyName("result");
-            json.WriteRawValue(messagesJson, skipInputValidation: true);
-            json.WriteEndObject();
-        }
-        return Encoding.UTF8.GetString(buffer.WrittenSpan);
+            write(json);
+        return buffer.WrittenSpan.ToArray();
     }
+}
 
-    public static string Error(string? id, string error) =>
-        new JsonObject { ["id"] = id, ["error"] = error }.ToJsonString();
+static class BridgeMessages
+{
+    public static byte[] Result(string id, string result) => Utf8Json.Write(json =>
+    {
+        json.WriteStartObject();
+        json.WriteString("id", id);
+        json.WriteString("result", result);
+        json.WriteEndObject();
+    });
 
-    public static string Push(string id, string security, string eventName, JsonNode? data) =>
-        new JsonObject { ["id"] = id, ["security"] = security, ["event"] = eventName, ["data"] = data }.ToJsonString();
+    public static byte[] Data(string id, DateTime asOf, byte[] messagesJson) => Utf8Json.Write(json =>
+    {
+        json.WriteStartObject();
+        json.WriteString("id", id);
+        json.WriteString("asOf", asOf);
+        json.WritePropertyName("result");
+        json.WriteRawValue(messagesJson, skipInputValidation: true);
+        json.WriteEndObject();
+    });
+
+    public static byte[] Error(string? id, string error) => Utf8Json.Write(json =>
+    {
+        json.WriteStartObject();
+        json.WriteString("id", id);
+        json.WriteString("error", error);
+        json.WriteEndObject();
+    });
+
+    public static byte[] Push(string id, string security, string eventName, byte[]? dataJson) => Utf8Json.Write(json =>
+    {
+        json.WriteStartObject();
+        json.WriteString("id", id);
+        json.WriteString("security", security);
+        json.WriteString("event", eventName);
+        json.WritePropertyName("data");
+        if (dataJson is null)
+            json.WriteNullValue();
+        else
+            json.WriteRawValue(dataJson, skipInputValidation: true);
+        json.WriteEndObject();
+    });
 }
 
 sealed record BridgeRequest(

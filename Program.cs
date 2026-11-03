@@ -1,8 +1,6 @@
 using System.Net;
 using System.Net.WebSockets;
-using System.Text;
 using System.Text.Json;
-using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using System.Threading.Channels;
 using System.Threading.RateLimiting;
@@ -10,7 +8,7 @@ using Microsoft.Extensions.Caching.Memory;
 
 const int MaxMessageBytes = 64 * 1024;
 const int MaxPendingMessagesPerClient = 10_000;
-const long MaxCachedCharacters = 100_000_000;
+const long MaxCachedBytes = 200_000_000;
 
 #if DEBUG
 var mock = args.Contains("--mock");
@@ -52,7 +50,7 @@ if (mock)
 IBloombergRequests requests = mock ? new FakeBloombergRequests() : new BloombergRequests();
 IBloombergSubscriptions subscriptions = mock ? new FakeBloombergSubscriptions() : new BloombergSubscriptions();
 
-var cache = new MemoryCache(new MemoryCacheOptions { SizeLimit = MaxCachedCharacters });
+var cache = new MemoryCache(new MemoryCacheOptions { SizeLimit = MaxCachedBytes });
 
 var dailyBudget = new FixedWindowRateLimiter(new FixedWindowRateLimiterOptions
 {
@@ -104,7 +102,7 @@ bool IsTrusted(HttpContext context) =>
 
 async Task Serve(WebSocket socket, CancellationToken cancel)
 {
-    var outbox = Channel.CreateBounded<string>(MaxPendingMessagesPerClient);
+    var outbox = Channel.CreateBounded<byte[]>(MaxPendingMessagesPerClient);
     var sending = SendAll(socket, outbox.Reader, cancel);
     WebSocketCloseStatus closeStatus;
     try
@@ -120,13 +118,13 @@ async Task Serve(WebSocket socket, CancellationToken cancel)
     await socket.CloseOutputAsync(closeStatus, null, cancel);
 }
 
-async Task SendAll(WebSocket socket, ChannelReader<string> outbox, CancellationToken cancel)
+async Task SendAll(WebSocket socket, ChannelReader<byte[]> outbox, CancellationToken cancel)
 {
     await foreach (var message in outbox.ReadAllAsync(cancel))
-        await socket.SendAsync(Encoding.UTF8.GetBytes(message).AsMemory(), WebSocketMessageType.Text, true, cancel);
+        await socket.SendAsync(message.AsMemory(), WebSocketMessageType.Text, true, cancel);
 }
 
-async Task<WebSocketCloseStatus> ReceiveAll(WebSocket socket, ChannelWriter<string> outbox, CancellationToken cancel)
+async Task<WebSocketCloseStatus> ReceiveAll(WebSocket socket, ChannelWriter<byte[]> outbox, CancellationToken cancel)
 {
     var buffer = new byte[MaxMessageBytes];
     while (true)
@@ -153,7 +151,7 @@ async Task<WebSocketCloseStatus> ReceiveAll(WebSocket socket, ChannelWriter<stri
     }
 }
 
-async Task<string> Handle(ReadOnlyMemory<byte> message, ChannelWriter<string> outbox)
+async Task<byte[]> Handle(ReadOnlyMemory<byte> message, ChannelWriter<byte[]> outbox)
 {
     string? id = null;
     try
@@ -194,7 +192,7 @@ CachedData ExecuteWithCache(BridgeRequest request)
 
     SpendDailyBudget(request);
     var askedAt = DateTime.UtcNow;
-    var fresh = new CachedData(askedAt, requests.Execute(request).ToJsonString());
+    var fresh = new CachedData(askedAt, requests.Execute(request));
     cache.Set(key, fresh, new MemoryCacheEntryOptions
     {
         Size = fresh.MessagesJson.Length,
@@ -210,4 +208,4 @@ void SpendDailyBudget(BridgeRequest request)
         throw new InvalidOperationException($"Daily budget of {maxDataPointsPerDay} Bloomberg data points reached");
 }
 
-sealed record CachedData(DateTime AsOf, string MessagesJson);
+sealed record CachedData(DateTime AsOf, byte[] MessagesJson);

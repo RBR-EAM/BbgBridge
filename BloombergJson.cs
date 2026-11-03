@@ -1,42 +1,69 @@
-using System.Text.Json.Nodes;
+using System.Text.Json;
 using Bloomberglp.Blpapi;
 
 static class BloombergJson
 {
-    public static JsonNode? ToJson(Element element)
+    public static byte[] ToUtf8(Element element) => Utf8Json.Write(json => Write(json, element));
+
+    public static void Write(Utf8JsonWriter json, Element element)
     {
         if (element.IsNull)
-            return null;
-
-        if (element.IsArray)
         {
-            var array = new JsonArray();
-            for (var i = 0; i < element.NumValues; i++)
-                array.Add(element.IsComplexType ? ToJson(element.GetValueAsElement(i)) : ScalarToJson(element, i));
-            return array;
+            json.WriteNullValue();
         }
-
-        if (element.IsComplexType)
+        else if (element.IsArray)
         {
-            var obj = new JsonObject();
+            json.WriteStartArray();
+            for (var i = 0; i < element.NumValues; i++)
+            {
+                if (element.IsComplexType)
+                    Write(json, element.GetValueAsElement(i));
+                else
+                    WriteScalar(json, element, i);
+            }
+            json.WriteEndArray();
+        }
+        else if (element.IsComplexType)
+        {
+            json.WriteStartObject();
             for (var i = 0; i < element.NumElements; i++)
             {
                 var child = element.GetElement(i);
-                obj[child.Name.ToString()] = ToJson(child);
+                json.WritePropertyName(child.Name.ToString());
+                Write(json, child);
             }
-            return obj;
+            json.WriteEndObject();
         }
-
-        return ScalarToJson(element, 0);
+        else
+        {
+            WriteScalar(json, element, 0);
+        }
     }
 
-    static JsonNode? ScalarToJson(Element element, int index) => element.Datatype switch
+    static void WriteScalar(Utf8JsonWriter json, Element element, int index)
     {
-        Schema.Datatype.BOOL => element.GetValueAsBool(index),
-        Schema.Datatype.INT32 or Schema.Datatype.INT64 => element.GetValueAsInt64(index),
-        Schema.Datatype.FLOAT32 or Schema.Datatype.FLOAT64 => FiniteOrNull(element.GetValueAsFloat64(index)),
-        _ => element.GetValueAsString(index),
-    };
+        switch (element.Datatype)
+        {
+            case Schema.Datatype.BOOL:
+                json.WriteBooleanValue(element.GetValueAsBool(index));
+                break;
+            case Schema.Datatype.INT32 or Schema.Datatype.INT64:
+                json.WriteNumberValue(element.GetValueAsInt64(index));
+                break;
+            case Schema.Datatype.FLOAT32 or Schema.Datatype.FLOAT64:
+                WriteFiniteOrNull(json, element.GetValueAsFloat64(index));
+                break;
+            default:
+                json.WriteStringValue(element.GetValueAsString(index));
+                break;
+        }
+    }
 
-    static JsonNode? FiniteOrNull(double value) => double.IsFinite(value) ? JsonValue.Create(value) : null;
+    static void WriteFiniteOrNull(Utf8JsonWriter json, double value)
+    {
+        if (double.IsFinite(value))
+            json.WriteNumberValue(value);
+        else
+            json.WriteNullValue();
+    }
 }

@@ -17,10 +17,11 @@ minimal and trivial to read for a .NET developer: flat layout, few files, no com
 - Reference data: one synchronous session, one request at a time, lazy connection, session reset on any failure.
 - Real time: a separate asynchronous session, `interval=1.0`, lock-free event handler, a bounded outbox per
   connection. `SessionTerminated` is pushed to subscribers.
-- In-memory cache (`CacheSeconds`, default 3600) keyed by the request without its `id` and `maxAgeSeconds`. It
-  stores the serialized JSON (not `JsonNode` trees) and is capped at 100 million characters; a larger answer is
-  not cached. Workstation GC (desktop tool).
-  Replies carry `asOf` (UTC time Bloomberg was queried). `maxAgeSeconds` per request sets the oldest acceptable
+- JSON is written directly as UTF-8 with `Utf8JsonWriter` (Bloomberg elements, mock data, replies, pushes); no
+  `JsonNode` trees. The bytes flow unchanged through the cache and the per-connection outbox to the WebSocket.
+- In-memory cache (`CacheSeconds`, default 3600) keyed by the request without its `id` and `maxAgeSeconds`, capped
+  at 200 MB of JSON; a larger answer is not cached. Workstation GC (desktop tool).
+- Replies carry `asOf` (UTC time Bloomberg was queried). `maxAgeSeconds` per request sets the oldest acceptable
   cached answer (`0` forces a Bloomberg call).
 - Daily budget of data points (securities × fields), `MaxDataPointsPerDay` default 250000: placeholder, to confirm
   with Bloomberg. It is the bridge's own protection, not Bloomberg's accounting.
@@ -40,10 +41,10 @@ minimal and trivial to read for a .NET developer: flat layout, few files, no com
 | File | Role |
 |---|---|
 | `Program.cs` | Host, security gate, WebSocket loop, cache, daily budget |
-| `Protocol.cs` | `BridgeRequest` with validation, `BridgeMessages` for replies and pushes |
+| `Protocol.cs` | `BridgeRequest` with validation, `BridgeMessages` for replies and pushes, `Utf8Json` helper |
 | `BloombergRequests.cs` | `//blp/refdata` requests |
 | `BloombergSubscriptions.cs` | `//blp/mktdata` subscriptions |
-| `BloombergJson.cs` | Bloomberg `Element` to JSON |
+| `BloombergJson.cs` | Writes a Bloomberg `Element` as JSON |
 | `FakeBloomberg.cs` | Mock mode |
 
 ## Findings
@@ -54,9 +55,12 @@ minimal and trivial to read for a .NET developer: flat layout, few files, no com
   the next request.
 - The publish folder also contains `aspnetcorev2_inprocess.dll` (IIS module from the runtime pack, unused).
 - Memory, mock mode, 2 × (1000 securities × 1 field × 3 years daily, 26.5 MB of JSON) + 1 small request, process
-  RSS afterwards: JsonNode cache + server GC 1180 MB; serialized cache + server GC 885 MB; serialized cache +
-  workstation GC 833 MB. Cached answer served in 0.5 s instead of 1.6 s. The remaining peak comes from building
-  the answer as a `JsonNode` tree; writing JSON directly from Bloomberg elements (`Utf8JsonWriter`) would lower it.
+  RSS afterwards (first answer / cached answer):
+  - JsonNode cache, server GC: 1180 MB (5.1 s / 1.6 s);
+  - serialized string cache, workstation GC: 778 MB (2.9 s / 0.2 s);
+  - direct UTF-8 writing end to end, workstation GC: 356 MB (1.1 s / 0.06 s).
+- Golden check for the UTF-8 refactor: 16 replies and pushes (8.7 MB) byte-identical to commit 956f401 once `asOf`
+  and live tick values are normalized.
 - Cloud environment: `git commit` is denied when run directly through Bash; use the `.work/runner.sh` job runner.
 - Cloud environment: repository settings (for example the default branch) cannot be changed through `gh`, and
   remote branches cannot be deleted with `git push --delete`: the proxy answers 403. The user does both on GitHub.

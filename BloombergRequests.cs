@@ -1,11 +1,10 @@
 using System.Diagnostics;
-using System.Text.Json.Nodes;
 using Bloomberglp.Blpapi;
 using SessionOptions = Bloomberglp.Blpapi.SessionOptions;
 
 interface IBloombergRequests
 {
-    JsonArray Execute(BridgeRequest query);
+    byte[] Execute(BridgeRequest query);
 }
 
 sealed class BloombergRequests : IBloombergRequests
@@ -16,7 +15,7 @@ sealed class BloombergRequests : IBloombergRequests
     readonly Lock _lock = new();
     Session? _session;
 
-    public JsonArray Execute(BridgeRequest query)
+    public byte[] Execute(BridgeRequest query)
     {
         lock (_lock)
         {
@@ -84,12 +83,15 @@ sealed class BloombergRequests : IBloombergRequests
         public static readonly Name PeriodicitySelection = new("periodicitySelection");
     }
 
-    static JsonArray ReadResponse(Session session)
+    static byte[] ReadResponse(Session session) => Utf8Json.Write(json =>
     {
-        var messages = new JsonArray();
+        json.WriteStartArray();
         var clock = Stopwatch.StartNew();
-        while (clock.Elapsed < RequestTimeout)
+        while (true)
         {
+            if (clock.Elapsed > RequestTimeout)
+                throw new TimeoutException("Bloomberg did not answer in time");
+
             var bloombergEvent = session.NextEvent(1000);
 
             if (bloombergEvent.Type == Event.EventType.REQUEST_STATUS)
@@ -97,11 +99,11 @@ sealed class BloombergRequests : IBloombergRequests
 
             if (bloombergEvent.Type is Event.EventType.PARTIAL_RESPONSE or Event.EventType.RESPONSE)
                 foreach (Message message in bloombergEvent)
-                    messages.Add(BloombergJson.ToJson(message.AsElement));
+                    BloombergJson.Write(json, message.AsElement);
 
             if (bloombergEvent.Type == Event.EventType.RESPONSE)
-                return messages;
+                break;
         }
-        throw new TimeoutException("Bloomberg did not answer in time");
-    }
+        json.WriteEndArray();
+    });
 }

@@ -5,9 +5,9 @@ using SessionOptions = Bloomberglp.Blpapi.SessionOptions;
 
 interface IBloombergSubscriptions
 {
-    void Subscribe(ChannelWriter<string> outbox, BridgeRequest request);
-    void Unsubscribe(ChannelWriter<string> outbox, string id);
-    void UnsubscribeAll(ChannelWriter<string> outbox);
+    void Subscribe(ChannelWriter<byte[]> outbox, BridgeRequest request);
+    void Unsubscribe(ChannelWriter<byte[]> outbox, string id);
+    void UnsubscribeAll(ChannelWriter<byte[]> outbox);
 }
 
 sealed class BloombergSubscriptions : IBloombergSubscriptions
@@ -21,9 +21,9 @@ sealed class BloombergSubscriptions : IBloombergSubscriptions
     volatile bool _sessionTerminated;
     long _lastCorrelationId;
 
-    sealed record Subscriber(ChannelWriter<string> Outbox, string Id, string Security, Subscription Subscription);
+    sealed record Subscriber(ChannelWriter<byte[]> Outbox, string Id, string Security, Subscription Subscription);
 
-    public void Subscribe(ChannelWriter<string> outbox, BridgeRequest request)
+    public void Subscribe(ChannelWriter<byte[]> outbox, BridgeRequest request)
     {
         lock (_lock)
         {
@@ -57,9 +57,9 @@ sealed class BloombergSubscriptions : IBloombergSubscriptions
         }
     }
 
-    public void Unsubscribe(ChannelWriter<string> outbox, string id) => Remove(s => s.Outbox == outbox && s.Id == id);
+    public void Unsubscribe(ChannelWriter<byte[]> outbox, string id) => Remove(s => s.Outbox == outbox && s.Id == id);
 
-    public void UnsubscribeAll(ChannelWriter<string> outbox) => Remove(s => s.Outbox == outbox);
+    public void UnsubscribeAll(ChannelWriter<byte[]> outbox) => Remove(s => s.Outbox == outbox);
 
     void Remove(Func<Subscriber, bool> match)
     {
@@ -96,7 +96,7 @@ sealed class BloombergSubscriptions : IBloombergSubscriptions
                 && message.CorrelationID is { } correlationId
                 && _subscribers.TryGetValue(correlationId.Value, out var subscriber))
             {
-                var data = BloombergJson.ToJson(message.AsElement);
+                var data = BloombergJson.ToUtf8(message.AsElement);
                 subscriber.Outbox.TryWrite(BridgeMessages.Push(subscriber.Id, subscriber.Security, message.MessageType.ToString(), data));
             }
             else if (message.MessageType.ToString() == "SessionTerminated" && session == _session)

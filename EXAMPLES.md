@@ -157,4 +157,58 @@ Le pont refuse la requête (validation, limite, budget, Terminal indisponible) :
 { "id": "bdp", "error": "fields: 1 to 25 names made of letters, digits and _" }
 ```
 
-Un titre ou un champ invalide ne fait pas échouer la requête : Bloomberg le signale dans le `securityData` concerné, par `securityError` pour un titre et dans `fieldExceptions` pour un champ. Le bouton « Erreurs » de la page de test envoie une requête de ce type ; son exemple reste à ajouter ici.
+Un titre ou un champ invalide ne fait pas échouer la requête : Bloomberg le signale dans le `securityData` concerné, et le reste de la requête est servi normalement.
+
+- **Champ invalide** : une entrée dans `fieldExceptions`, avec `fieldId` et `errorInfo`. Les autres champs du titre restent dans `fieldData`.
+- **Titre invalide** : `fieldData` est vide (`{}`), et un objet `securityError` apparaît.
+
+C'est la requête du bouton « Erreurs » de la page de test. Le mode simulé produit les mêmes erreurs pour les titres et les champs dont le nom commence par `NOT_A`.
+
+```json
+{ "id": "errors", "type": "ReferenceDataRequest", "securities": ["IBM US Equity", "NOT_A_TICKER US Equity"], "fields": ["PX_LAST", "NOT_A_FIELD"] }
+```
+
+```json
+{
+  "id": "errors",
+  "asOf": "2026-11-03T12:57:46.0687389Z",
+  "result": [
+    {
+      "securityData": [
+        {
+          "security": "IBM US Equity",
+          "eidData": [],
+          "fieldExceptions": [
+            {
+              "fieldId": "NOT_A_FIELD",
+              "errorInfo": {
+                "source": "12345:rsfrdsvc1",
+                "code": 9,
+                "category": "BAD_FLD",
+                "message": "Field not valid",
+                "subcategory": "INVALID_FIELD"
+              }
+            }
+          ],
+          "fieldData": { "PX_LAST": 123.45 },
+          "sequenceNumber": 0
+        },
+        {
+          "security": "NOT_A_TICKER US Equity",
+          "eidData": [],
+          "fieldExceptions": [],
+          "fieldData": {},
+          "securityError": {
+            "source": "12345:rsfrdsvc1",
+            "code": 43,
+            "category": "BAD_SEC",
+            "message": "Unknown/Invalid Security  [nid:12345]",
+            "subcategory": "INVALID_SECURITY"
+          },
+          "sequenceNumber": 1
+        }
+      ]
+    }
+  ]
+}
+```

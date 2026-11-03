@@ -83,7 +83,9 @@ minimal and trivial to read for a .NET developer: flat layout, few files, no com
   security gate, validation, mock mode, cache, `asOf`, `maxAgeSeconds`, daily budget, behaviour without a Terminal.
 - Done: history volume capped at 1 million values per request (a maximal request used to be about 65 million).
 - Done: verified on a live Terminal with the test page (BDP, BDS, BDH, Subscribe, Unsubscribe).
-- Not verified: Bloomberg's error structure for an invalid security or field (to capture with the « Erreurs »
-  button of the test page and add to `EXAMPLES.md`), reconnection after a Terminal logout, the published Release
-  exe on a manager's PC.
+- Done: Bloomberg's error structure captured live (invalid field: `fieldExceptions[]` with `fieldId` and
+  `errorInfo`; invalid security: empty `fieldData` and `securityError`), documented in `EXAMPLES.md` and reproduced
+  by the mock for BDP/BDS names starting with `NOT_A`.
+- Not verified: reconnection after a Terminal logout, the published Release exe on a manager's PC, Bloomberg's
+  error structure for a `HistoricalDataRequest`.
 - Next: confirm `MaxDataPointsPerDay` with Bloomberg.

@@ -117,7 +117,7 @@ ws.onopen = () => ws.send(JSON.stringify({ id: "1", type: "ReferenceDataRequest"
 dotnet run -- --mock
 ```
 
-Le pont répond avec des données fictives sans Terminal : BDP, BDH, et des mises à jour temps réel chaque seconde. Les valeurs sont stables pour une date donnée, et tous les champs sont des nombres.
+Le pont répond avec des données fictives sans Terminal : BDP, BDH, et des mises à jour temps réel chaque seconde. La structure est celle de Bloomberg (voir [EXAMPLES.md](EXAMPLES.md)), les valeurs sont stables pour une date donnée, et tous les champs sont des nombres. Un titre ou un champ dont le nom commence par `NOT_A` produit l'erreur Bloomberg correspondante, sur un BDP ou un BDS.
 
 Ce mode n'existe que dans les builds **Debug**. L'exe publié en Release ignore `--mock` : il ne peut pas servir de fausses données à un gérant.
 

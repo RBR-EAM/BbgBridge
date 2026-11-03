@@ -17,20 +17,36 @@ sealed class FakeBloombergRequests : IBloombergRequests
     static void WriteReferenceData(Utf8JsonWriter json, BridgeRequest query)
     {
         var today = DateTime.UtcNow.Date;
+        var validFields = query.Fields!.Where(field => !FakeData.IsInvalid(field)).ToArray();
+        var invalidFields = query.Fields!.Where(FakeData.IsInvalid).ToArray();
         json.WriteStartArray();
         json.WriteStartObject();
         json.WriteStartArray("securityData");
         for (var i = 0; i < query.Securities!.Length; i++)
         {
             var security = query.Securities[i];
+            var validSecurity = !FakeData.IsInvalid(security);
             json.WriteStartObject();
             json.WriteString("security", security);
             json.WriteStartArray("eidData");
             json.WriteEndArray();
             json.WriteStartArray("fieldExceptions");
+            foreach (var field in validSecurity ? invalidFields : [])
+            {
+                json.WriteStartObject();
+                json.WriteString("fieldId", field);
+                json.WritePropertyName("errorInfo");
+                FakeData.WriteError(json, 9, "BAD_FLD", "Field not valid", "INVALID_FIELD");
+                json.WriteEndObject();
+            }
             json.WriteEndArray();
             json.WritePropertyName("fieldData");
-            FakeData.WriteFields(json, security, query.Fields!, today);
+            FakeData.WriteFields(json, security, validSecurity ? validFields : [], today);
+            if (!validSecurity)
+            {
+                json.WritePropertyName("securityError");
+                FakeData.WriteError(json, 43, "BAD_SEC", "Unknown/Invalid Security", "INVALID_SECURITY");
+            }
             json.WriteNumber("sequenceNumber", i);
             json.WriteEndObject();
         }
@@ -131,6 +147,19 @@ sealed class FakeBloombergSubscriptions : IBloombergSubscriptions
 
 static class FakeData
 {
+    public static bool IsInvalid(string name) => name.StartsWith("NOT_A");
+
+    public static void WriteError(Utf8JsonWriter json, int code, string category, string message, string subcategory)
+    {
+        json.WriteStartObject();
+        json.WriteString("source", "mock");
+        json.WriteNumber("code", code);
+        json.WriteString("category", category);
+        json.WriteString("message", message);
+        json.WriteString("subcategory", subcategory);
+        json.WriteEndObject();
+    }
+
     public static void WriteFields(Utf8JsonWriter json, string security, string[] fields, DateTime time)
     {
         json.WriteStartObject();
